@@ -1,0 +1,8 @@
+{
+  "name": "IG Meet",
+  "description": "Real-time mobile-first social messaging application with Global Chat, private 1-to-1 messaging, customizable user profiles, dual Light Pink and Eye-Comfort Dark themes, subscription verification tiers, and role-protected admin management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

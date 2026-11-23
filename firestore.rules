@@ -1,0 +1,740 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // GLOBAL SAFETY NET — Default Deny
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // PRIMITIVE HELPERS
+    // =========================================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedAuth() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isVerifiedAuth() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidConversationId(id) {
+      return id is string && id.size() >= 3 && id.size() <= 260 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedAuth() && request.auth.token.email == 'satpalsinghrawat640@gmail.com';
+    }
+
+    function isAdmin() {
+      return isVerifiedAuth() && (
+        isBootstrappedAdmin() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isMainAdmin() {
+      return isVerifiedAuth() && (
+        isBootstrappedAdmin() ||
+        (
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'main_admin'
+        )
+      );
+    }
+
+    function isNotSuspended() {
+      return !exists(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)).data.isSuspended == false;
+    }
+
+    function isValidHexColor(val) {
+      return val is string && val.size() == 7 && val.matches('^#[0-9A-Fa-f]{6}$');
+    }
+
+    function isValidUsername(val) {
+      return val is string && val.size() >= 3 && val.size() <= 30 && val.matches('^[a-z0-9_]+$');
+    }
+
+    function isValidUrlOrEmpty(val) {
+      return val is string && val.size() <= 1000 && (
+        val == '' || val.matches('^https://.*') || val.matches('^http://.*')
+      );
+    }
+
+    function isAtomicFirstAdminInit() {
+      return !exists(/databases/$(database)/documents/admin/initialization) &&
+        existsAfter(/databases/$(database)/documents/admin/initialization) &&
+        getAfter(/databases/$(database)/documents/admin/initialization).data.mainAdminUid == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/admin/initialization).data.initialized == true;
+    }
+
+    // =========================================================================
+    // VALIDATION BLUEPRINTS (Pillar 2 — Anti-Update-Gap)
+    // =========================================================================
+    function isValidPublicProfile(data, uid) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'username', 'photoURL', 'bio', 'profileColor',
+          'isVerified', 'subscriptionStatus', 'role', 'isSuspended',
+          'onlineStatus', 'showLastSeen', 'lastSeen', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'displayName', 'username', 'photoURL', 'bio', 'profileColor',
+          'isVerified', 'subscriptionStatus', 'role', 'isSuspended',
+          'onlineStatus', 'showLastSeen', 'lastSeen', 'createdAt', 'updatedAt'
+        ]) &&
+        data.uid == uid &&
+        isValidId(data.uid) &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60 &&
+        isValidUsername(data.username) &&
+        isValidUrlOrEmpty(data.photoURL) &&
+        data.bio is string && data.bio.size() <= 240 &&
+        isValidHexColor(data.profileColor) &&
+        data.isVerified is bool &&
+        data.subscriptionStatus in ['none', 'active', 'expired'] &&
+        data.role in ['user', 'admin', 'main_admin'] &&
+        data.isSuspended is bool &&
+        data.onlineStatus is bool &&
+        data.showLastSeen is bool &&
+        data.lastSeen is timestamp &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivate(data, uid) {
+      return data.keys().hasAll([
+          'uid', 'email', 'theme', 'onboardingCompleted', 'blockedUsers',
+          'fcmToken', 'allowPrivateMessages', 'lastGlobalReadAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'email', 'theme', 'onboardingCompleted', 'blockedUsers',
+          'fcmToken', 'allowPrivateMessages', 'lastGlobalReadAt', 'updatedAt'
+        ]) &&
+        data.uid == uid &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() <= 200 &&
+        data.theme in ['light_pink', 'eye_comfort_dark'] &&
+        data.onboardingCompleted is bool &&
+        data.blockedUsers is list && data.blockedUsers.size() <= 100 &&
+        (data.blockedUsers.size() == 0 || data.blockedUsers[0] is string) &&
+        data.fcmToken is string && data.fcmToken.size() <= 500 &&
+        data.allowPrivateMessages is bool &&
+        data.lastGlobalReadAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUsernameReservation(data) {
+      return data.keys().hasAll(['uid', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAdminInit(data) {
+      return data.keys().hasAll(['initialized', 'mainAdminUid', 'initializedAt']) &&
+        data.keys().hasOnly(['initialized', 'mainAdminUid', 'initializedAt']) &&
+        data.initialized == true &&
+        isValidId(data.mainAdminUid) &&
+        data.initializedAt is timestamp;
+    }
+
+    function isValidAdminRecord(data, uid) {
+      return data.keys().hasAll(['uid', 'role', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'role', 'createdAt']) &&
+        data.uid == uid &&
+        isValidId(data.uid) &&
+        data.role in ['main_admin', 'admin'] &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidGlobalMessage(data) {
+      return data.keys().hasAll([
+          'senderId', 'senderName', 'senderPhoto', 'senderColor',
+          'senderVerified', 'text', 'messageType', 'mediaUrl', 'isRemoved', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'senderId', 'senderName', 'senderPhoto', 'senderColor',
+          'senderVerified', 'text', 'messageType', 'mediaUrl', 'isRemoved', 'createdAt'
+        ]) &&
+        isValidId(data.senderId) &&
+        data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 60 &&
+        isValidUrlOrEmpty(data.senderPhoto) &&
+        isValidHexColor(data.senderColor) &&
+        data.senderVerified is bool &&
+        data.text is string && data.text.size() >= 1 && data.text.size() <= 1000 &&
+        data.messageType in ['text', 'image', 'announcement'] &&
+        isValidUrlOrEmpty(data.mediaUrl) &&
+        data.isRemoved is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidPrivateChat(data, conversationId) {
+      return data.keys().hasAll([
+          'conversationId', 'participantA', 'participantB', 'participantIds',
+          'lastMessage', 'lastSenderId', 'unreadA', 'unreadB', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'conversationId', 'participantA', 'participantB', 'participantIds',
+          'lastMessage', 'lastSenderId', 'unreadA', 'unreadB', 'createdAt', 'updatedAt'
+        ]) &&
+        data.conversationId == conversationId &&
+        isValidConversationId(data.conversationId) &&
+        isValidId(data.participantA) &&
+        isValidId(data.participantB) &&
+        data.participantA != data.participantB &&
+        data.participantIds is list &&
+        data.participantIds.size() == 2 &&
+        data.participantIds[0] == data.participantA &&
+        data.participantIds[1] == data.participantB &&
+        data.lastMessage is string && data.lastMessage.size() <= 300 &&
+        data.lastSenderId is string && data.lastSenderId.size() <= 128 &&
+        data.unreadA is int && data.unreadA >= 0 && data.unreadA <= 100000 &&
+        data.unreadB is int && data.unreadB >= 0 && data.unreadB <= 100000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPrivateMessage(data) {
+      return data.keys().hasAll([
+          'senderId', 'participantIds', 'text', 'messageType', 'mediaUrl', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'senderId', 'participantIds', 'text', 'messageType', 'mediaUrl', 'createdAt'
+        ]) &&
+        isValidId(data.senderId) &&
+        data.participantIds is list &&
+        data.participantIds.size() == 2 &&
+        data.participantIds[0] is string &&
+        data.participantIds[1] is string &&
+        data.text is string && data.text.size() >= 1 && data.text.size() <= 1000 &&
+        data.messageType in ['text', 'image'] &&
+        isValidUrlOrEmpty(data.mediaUrl) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidSubscriptionPlan(data, planId) {
+      return data.keys().hasAll([
+          'planId', 'name', 'description', 'priceLabel',
+          'durationDays', 'isActive', 'sortOrder', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'planId', 'name', 'description', 'priceLabel',
+          'durationDays', 'isActive', 'sortOrder', 'updatedAt'
+        ]) &&
+        data.planId == planId &&
+        data.planId in ['tier_1', 'tier_2', 'tier_3'] &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 400 &&
+        data.priceLabel is string && data.priceLabel.size() <= 60 &&
+        data.durationDays is int && data.durationDays >= 1 && data.durationDays <= 3650 &&
+        data.isActive is bool &&
+        data.sortOrder is int && data.sortOrder >= 1 && data.sortOrder <= 3 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSubscriptionRecord(data) {
+      return data.keys().hasAll([
+          'uid', 'planId', 'planName', 'status', 'paymentReference',
+          'verifiedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'planId', 'planName', 'status', 'paymentReference',
+          'verifiedBy', 'startedAt', 'expiresAt', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.uid) &&
+        data.planId in ['tier_1', 'tier_2', 'tier_3'] &&
+        data.planName is string && data.planName.size() >= 1 && data.planName.size() <= 60 &&
+        data.status in ['pending_verification', 'active', 'expired', 'rejected'] &&
+        data.paymentReference is string && data.paymentReference.size() >= 3 && data.paymentReference.size() <= 120 &&
+        data.verifiedBy is string && data.verifiedBy.size() <= 128 &&
+        (!('startedAt' in data) || data.startedAt == null || data.startedAt is timestamp) &&
+        (!('expiresAt' in data) || data.expiresAt == null || data.expiresAt is timestamp) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasAll([
+          'reporterId', 'reportedUserId', 'targetType', 'targetId',
+          'reason', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'reporterId', 'reportedUserId', 'targetType', 'targetId',
+          'reason', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.reporterId) &&
+        isValidId(data.reportedUserId) &&
+        data.targetType in ['user', 'global_message', 'private_message'] &&
+        data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 200 &&
+        data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 500 &&
+        data.status in ['open', 'resolved', 'dismissed'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll([
+          'recipientId', 'title', 'body', 'type', 'linkTarget', 'read', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'recipientId', 'title', 'body', 'type', 'linkTarget', 'read', 'createdAt'
+        ]) &&
+        isValidId(data.recipientId) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 300 &&
+        data.type in ['private_message', 'global_chat', 'subscription', 'announcement', 'account'] &&
+        data.linkTarget is string && data.linkTarget.size() <= 200 &&
+        data.read is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['title', 'body', 'authorId', 'isActive', 'createdAt']) &&
+        data.keys().hasOnly(['title', 'body', 'authorId', 'isActive', 'createdAt']) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 1000 &&
+        isValidId(data.authorId) &&
+        data.isActive is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['adminUid', 'action', 'targetId', 'details', 'createdAt']) &&
+        data.keys().hasOnly(['adminUid', 'action', 'targetId', 'details', 'createdAt']) &&
+        isValidId(data.adminUid) &&
+        data.action is string && data.action.size() >= 1 && data.action.size() <= 100 &&
+        data.targetId is string && data.targetId.size() <= 200 &&
+        data.details is string && data.details.size() <= 500 &&
+        data.createdAt is timestamp;
+    }
+
+    // =========================================================================
+    // 1. PUBLIC PROFILES (PII-Free)
+    // =========================================================================
+    match /publicProfiles/{uid} {
+      allow get: if isVerifiedAuth() && isValidId(uid);
+      allow list: if isVerifiedAuth() && (resource.data.isSuspended == false || isAdmin());
+
+      allow create: if isVerifiedAuth() &&
+        isValidId(uid) &&
+        uid == request.auth.uid &&
+        isValidPublicProfile(incoming(), uid) &&
+        incoming().isVerified == false &&
+        incoming().subscriptionStatus == 'none' &&
+        incoming().isSuspended == false &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (
+          incoming().role == 'user' ||
+          (incoming().role == 'main_admin' && (isAtomicFirstAdminInit() || isBootstrappedAdmin()))
+        );
+
+      allow update: if isVerifiedAuth() &&
+        isValidId(uid) &&
+        isValidPublicProfile(incoming(), uid) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          // Action 1: Owner edits permitted profile fields ONLY (cannot change role, isVerified, subscriptionStatus, isSuspended)
+          (
+            isOwner(uid) &&
+            existing().isSuspended == false &&
+            incoming().role == existing().role &&
+            incoming().isVerified == existing().isVerified &&
+            incoming().subscriptionStatus == existing().subscriptionStatus &&
+            incoming().isSuspended == existing().isSuspended &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'username', 'photoURL', 'bio', 'profileColor',
+              'onlineStatus', 'showLastSeen', 'lastSeen', 'updatedAt'
+            ])
+          ) ||
+          // Action 2: Owner updates online presence heartbeat
+          (
+            isOwner(uid) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['onlineStatus', 'lastSeen', 'updatedAt'])
+          ) ||
+          // Action 3: Verified Admin manages verification, subscription status, or suspension (Main Admin protected)
+          (
+            isAdmin() &&
+            (existing().role != 'main_admin' || isMainAdmin()) &&
+            (existing().role != 'main_admin' || (incoming().role == 'main_admin' && incoming().isSuspended == false)) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'isVerified', 'subscriptionStatus', 'isSuspended', 'role', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isOwner(uid) && existing().role != 'main_admin';
+    }
+
+    // =========================================================================
+    // 2. USER PRIVATE (PII, Theme, Blocked Users, FCM Token)
+    // =========================================================================
+    match /userPrivate/{uid} {
+      allow get: if isVerifiedAuth() && isValidId(uid) && (uid == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isOwner(uid) &&
+        isValidId(uid) &&
+        isValidUserPrivate(incoming(), uid) &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedAuth() &&
+        isValidId(uid) &&
+        isValidUserPrivate(incoming(), uid) &&
+        incoming().uid == existing().uid &&
+        incoming().updatedAt == request.time &&
+        (
+          (
+            isOwner(uid) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'theme', 'onboardingCompleted', 'blockedUsers', 'fcmToken',
+              'allowPrivateMessages', 'lastGlobalReadAt', 'updatedAt'
+            ])
+          ) ||
+          isAdmin()
+        );
+
+      allow delete: if isOwner(uid);
+    }
+
+    // =========================================================================
+    // 3. USERNAMES INDEX (Unique Availability)
+    // =========================================================================
+    match /usernames/{username} {
+      allow get: if isVerifiedAuth() && isValidUsername(username);
+      allow list: if false;
+
+      allow create: if isVerifiedAuth() &&
+        isValidUsername(username) &&
+        isValidUsernameReservation(incoming()) &&
+        incoming().uid == request.auth.uid &&
+        incoming().createdAt == request.time;
+
+      allow update: if false;
+
+      allow delete: if isVerifiedAuth() &&
+        isValidUsername(username) &&
+        (existing().uid == request.auth.uid || isAdmin());
+    }
+
+    // =========================================================================
+    // 4. ATOMIC FIRST-USER ADMIN INITIALIZATION LOCK
+    // =========================================================================
+    match /admin/initialization {
+      allow get: if isVerifiedAuth();
+      allow list: if false;
+
+      allow create: if isVerifiedAuth() &&
+        !exists(/databases/$(database)/documents/admin/initialization) &&
+        isValidAdminInit(incoming()) &&
+        incoming().mainAdminUid == request.auth.uid &&
+        incoming().initializedAt == request.time;
+
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
+    // 5. TRUSTED ADMINS REGISTRY
+    // =========================================================================
+    match /admins/{adminUid} {
+      allow get: if isVerifiedAuth() && isValidId(adminUid) && (adminUid == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isVerifiedAuth() &&
+        isValidId(adminUid) &&
+        isValidAdminRecord(incoming(), adminUid) &&
+        incoming().createdAt == request.time &&
+        (
+          (adminUid == request.auth.uid && incoming().role == 'main_admin' && isAtomicFirstAdminInit()) ||
+          (isBootstrappedAdmin() && adminUid == request.auth.uid && incoming().role == 'main_admin') ||
+          (isMainAdmin() && incoming().role == 'admin')
+        );
+
+      allow update: if false;
+
+      allow delete: if isMainAdmin() &&
+        isValidId(adminUid) &&
+        existing().role != 'main_admin';
+    }
+
+    // =========================================================================
+    // 6. REAL-TIME GLOBAL CHAT
+    // =========================================================================
+    match /globalChatMessages/{messageId} {
+      allow get: if isVerifiedAuth() && isValidId(messageId) && (existing().isRemoved == false || isAdmin());
+      allow list: if isVerifiedAuth() && (resource.data.isRemoved == false || isAdmin());
+
+      allow create: if isVerifiedAuth() &&
+        isValidId(messageId) &&
+        isValidGlobalMessage(incoming()) &&
+        incoming().senderId == request.auth.uid &&
+        incoming().isRemoved == false &&
+        incoming().createdAt == request.time &&
+        (incoming().messageType != 'announcement' || isAdmin()) &&
+        isNotSuspended() &&
+        exists(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)) &&
+        incoming().senderVerified == get(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)).data.isVerified;
+
+      allow update: if isAdmin() &&
+        isValidId(messageId) &&
+        isValidGlobalMessage(incoming()) &&
+        incoming().senderId == existing().senderId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isRemoved', 'text']);
+
+      allow delete: if isVerifiedAuth() &&
+        isValidId(messageId) &&
+        (existing().senderId == request.auth.uid || isAdmin());
+    }
+
+    // =========================================================================
+    // 7. PRIVATE 1-TO-1 CHATS & MESSAGES (Master Gate)
+    // =========================================================================
+    match /privateChats/{conversationId} {
+      allow get: if isVerifiedAuth() &&
+        isValidConversationId(conversationId) &&
+        request.auth.uid in existing().participantIds;
+
+      allow list: if isVerifiedAuth() &&
+        request.auth.uid in resource.data.participantIds;
+
+      allow create: if isVerifiedAuth() &&
+        isValidConversationId(conversationId) &&
+        isValidPrivateChat(incoming(), conversationId) &&
+        request.auth.uid in incoming().participantIds &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isNotSuspended() &&
+        exists(/databases/$(database)/documents/publicProfiles/$(incoming().participantA)) &&
+        exists(/databases/$(database)/documents/publicProfiles/$(incoming().participantB));
+
+      allow update: if isVerifiedAuth() &&
+        isValidConversationId(conversationId) &&
+        isValidPrivateChat(incoming(), conversationId) &&
+        request.auth.uid in existing().participantIds &&
+        incoming().conversationId == existing().conversationId &&
+        incoming().participantA == existing().participantA &&
+        incoming().participantB == existing().participantB &&
+        incoming().participantIds == existing().participantIds &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isNotSuspended() &&
+        (
+          // Action 1: Send message metadata update
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'lastMessage', 'lastSenderId', 'unreadA', 'unreadB', 'updatedAt'
+          ]) ||
+          // Action 2: Mark conversation read
+          incoming().diff(existing()).affectedKeys().hasOnly(['unreadA', 'unreadB', 'updatedAt'])
+        );
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get: if isVerifiedAuth() &&
+          isValidConversationId(conversationId) &&
+          isValidId(messageId) &&
+          request.auth.uid in get(/databases/$(database)/documents/privateChats/$(conversationId)).data.participantIds;
+
+        allow list: if isVerifiedAuth() &&
+          request.auth.uid in resource.data.participantIds;
+
+        allow create: if isVerifiedAuth() &&
+          isValidConversationId(conversationId) &&
+          isValidId(messageId) &&
+          isValidPrivateMessage(incoming()) &&
+          incoming().senderId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          isNotSuspended() &&
+          exists(/databases/$(database)/documents/privateChats/$(conversationId)) &&
+          request.auth.uid in get(/databases/$(database)/documents/privateChats/$(conversationId)).data.participantIds &&
+          incoming().participantIds == get(/databases/$(database)/documents/privateChats/$(conversationId)).data.participantIds;
+
+        allow update: if false;
+
+        allow delete: if isVerifiedAuth() &&
+          isValidConversationId(conversationId) &&
+          isValidId(messageId) &&
+          existing().senderId == request.auth.uid &&
+          request.auth.uid in get(/databases/$(database)/documents/privateChats/$(conversationId)).data.participantIds;
+      }
+    }
+
+    // =========================================================================
+    // 8. SUBSCRIPTION PLANS (3 Admin-Configurable Tiers)
+    // =========================================================================
+    match /subscriptionPlans/{planId} {
+      allow get: if isVerifiedAuth() && isValidId(planId) && (existing().isActive == true || isAdmin());
+      allow list: if isVerifiedAuth() && (resource.data.isActive == true || isAdmin());
+
+      allow create: if isAdmin() &&
+        isValidId(planId) &&
+        isValidSubscriptionPlan(incoming(), planId) &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isAdmin() &&
+        isValidId(planId) &&
+        isValidSubscriptionPlan(incoming(), planId) &&
+        incoming().planId == existing().planId &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'description', 'priceLabel', 'durationDays', 'isActive', 'sortOrder', 'updatedAt'
+        ]);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // 9. SUBSCRIPTIONS (Backend/Admin Controlled Verification)
+    // =========================================================================
+    match /subscriptions/{subscriptionId} {
+      allow get: if isVerifiedAuth() && isValidId(subscriptionId) && (existing().uid == request.auth.uid || isAdmin());
+      allow list: if isVerifiedAuth() && (resource.data.uid == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedAuth() &&
+        isValidId(subscriptionId) &&
+        isValidSubscriptionRecord(incoming()) &&
+        incoming().uid == request.auth.uid &&
+        incoming().status == 'pending_verification' &&
+        incoming().verifiedBy == '' &&
+        (!('startedAt' in incoming()) || incoming().startedAt == null) &&
+        (!('expiresAt' in incoming()) || incoming().expiresAt == null) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isNotSuspended() &&
+        exists(/databases/$(database)/documents/subscriptionPlans/$(incoming().planId));
+
+      allow update: if isAdmin() &&
+        isValidId(subscriptionId) &&
+        isValidSubscriptionRecord(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().planId == existing().planId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'status', 'verifiedBy', 'startedAt', 'expiresAt', 'updatedAt'
+        ]);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // 10. MODERATION REPORTS
+    // =========================================================================
+    match /reports/{reportId} {
+      allow get: if isVerifiedAuth() && isValidId(reportId) && (existing().reporterId == request.auth.uid || isAdmin());
+      allow list: if isVerifiedAuth() && (resource.data.reporterId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedAuth() &&
+        isValidId(reportId) &&
+        isValidReport(incoming()) &&
+        incoming().reporterId == request.auth.uid &&
+        incoming().status == 'open' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/publicProfiles/$(incoming().reportedUserId));
+
+      allow update: if isAdmin() &&
+        isValidId(reportId) &&
+        isValidReport(incoming()) &&
+        existing().status == 'open' &&
+        incoming().reporterId == existing().reporterId &&
+        incoming().reportedUserId == existing().reportedUserId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // 11. NOTIFICATIONS
+    // =========================================================================
+    match /notifications/{notificationId} {
+      allow get: if isVerifiedAuth() && isValidId(notificationId) && (existing().recipientId == request.auth.uid || isAdmin());
+      allow list: if isVerifiedAuth() && (resource.data.recipientId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedAuth() &&
+        isValidId(notificationId) &&
+        isValidNotification(incoming()) &&
+        incoming().read == false &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/publicProfiles/$(incoming().recipientId)) &&
+        (
+          (incoming().type == 'private_message' && isNotSuspended()) ||
+          isAdmin()
+        );
+
+      allow update: if isVerifiedAuth() &&
+        isValidId(notificationId) &&
+        isValidNotification(incoming()) &&
+        existing().recipientId == request.auth.uid &&
+        incoming().recipientId == existing().recipientId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+
+      allow delete: if isVerifiedAuth() &&
+        isValidId(notificationId) &&
+        (existing().recipientId == request.auth.uid || isAdmin());
+    }
+
+    // =========================================================================
+    // 12. OFFICIAL ANNOUNCEMENTS
+    // =========================================================================
+    match /announcements/{announcementId} {
+      allow get: if isVerifiedAuth() && isValidId(announcementId) && (existing().isActive == true || isAdmin());
+      allow list: if isVerifiedAuth() && (resource.data.isActive == true || isAdmin());
+
+      allow create: if isAdmin() &&
+        isValidId(announcementId) &&
+        isValidAnnouncement(incoming()) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().createdAt == request.time;
+
+      allow update: if isAdmin() &&
+        isValidId(announcementId) &&
+        isValidAnnouncement(incoming()) &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'body', 'isActive']);
+
+      allow delete: if isAdmin() && isValidId(announcementId);
+    }
+
+    // =========================================================================
+    // 13. ADMIN AUDIT LOGS (Append-Only)
+    // =========================================================================
+    match /adminAuditLogs/{logId} {
+      allow get: if isAdmin() && isValidId(logId);
+      allow list: if isAdmin();
+
+      allow create: if isAdmin() &&
+        isValidId(logId) &&
+        isValidAuditLog(incoming()) &&
+        incoming().adminUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+
+      allow update, delete: if false;
+    }
+  }
+}

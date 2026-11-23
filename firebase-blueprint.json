@@ -1,0 +1,683 @@
+{
+  "entities": {
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Publicly discoverable user profile isolated from PII such as email.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "username": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 30,
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "bio": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "profileColor": {
+          "type": "string",
+          "maxLength": 7,
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "isVerified": {
+          "type": "boolean"
+        },
+        "subscriptionStatus": {
+          "type": "string",
+          "enum": ["none", "active", "expired"]
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "admin", "main_admin"]
+        },
+        "isSuspended": {
+          "type": "boolean"
+        },
+        "onlineStatus": {
+          "type": "boolean"
+        },
+        "showLastSeen": {
+          "type": "boolean"
+        },
+        "lastSeen": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "username",
+        "photoURL",
+        "bio",
+        "profileColor",
+        "isVerified",
+        "subscriptionStatus",
+        "role",
+        "isSuspended",
+        "onlineStatus",
+        "showLastSeen",
+        "lastSeen",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Private user preferences, PII (email), theme, blocked list, and push token.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["light_pink", "eye_comfort_dark"]
+        },
+        "onboardingCompleted": {
+          "type": "boolean"
+        },
+        "blockedUsers": {
+          "type": "array"
+        },
+        "fcmToken": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "allowPrivateMessages": {
+          "type": "boolean"
+        },
+        "lastGlobalReadAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "theme",
+        "onboardingCompleted",
+        "blockedUsers",
+        "fcmToken",
+        "allowPrivateMessages",
+        "lastGlobalReadAt",
+        "updatedAt"
+      ]
+    },
+    "UsernameReservation": {
+      "title": "UsernameReservation",
+      "description": "Enforces globally unique usernames.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "createdAt"]
+    },
+    "AdminInitialization": {
+      "title": "AdminInitialization",
+      "description": "Immutable one-time lock guaranteeing only the first registered account becomes Main Admin.",
+      "type": "object",
+      "properties": {
+        "initialized": {
+          "type": "boolean"
+        },
+        "mainAdminUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "initializedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["initialized", "mainAdminUid", "initializedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted server-enforced administrator role record.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["main_admin", "admin"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "role", "createdAt"]
+    },
+    "GlobalChatMessage": {
+      "title": "GlobalChatMessage",
+      "description": "Real-time message in the IG Meet Global Chat room.",
+      "type": "object",
+      "properties": {
+        "senderId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "senderPhoto": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "senderColor": {
+          "type": "string",
+          "maxLength": 7,
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "senderVerified": {
+          "type": "boolean"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "messageType": {
+          "type": "string",
+          "enum": ["text", "image", "announcement"]
+        },
+        "mediaUrl": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "isRemoved": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "senderId",
+        "senderName",
+        "senderPhoto",
+        "senderColor",
+        "senderVerified",
+        "text",
+        "messageType",
+        "mediaUrl",
+        "isRemoved",
+        "createdAt"
+      ]
+    },
+    "PrivateChat": {
+      "title": "PrivateChat",
+      "description": "One-to-one private conversation metadata accessible strictly by its two participants.",
+      "type": "object",
+      "properties": {
+        "conversationId": {
+          "type": "string",
+          "maxLength": 260,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participantA": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participantB": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participantIds": {
+          "type": "array"
+        },
+        "lastMessage": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "lastSenderId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "unreadA": {
+          "type": "integer"
+        },
+        "unreadB": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "conversationId",
+        "participantA",
+        "participantB",
+        "participantIds",
+        "lastMessage",
+        "lastSenderId",
+        "unreadA",
+        "unreadB",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PrivateMessage": {
+      "title": "PrivateMessage",
+      "description": "Single message inside a one-to-one private conversation.",
+      "type": "object",
+      "properties": {
+        "senderId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participantIds": {
+          "type": "array"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "messageType": {
+          "type": "string",
+          "enum": ["text", "image"]
+        },
+        "mediaUrl": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "senderId",
+        "participantIds",
+        "text",
+        "messageType",
+        "mediaUrl",
+        "createdAt"
+      ]
+    },
+    "SubscriptionPlan": {
+      "title": "SubscriptionPlan",
+      "description": "Admin-configurable subscription tier (exactly 3 tiers) whose core benefit is the blue verification tick.",
+      "type": "object",
+      "properties": {
+        "planId": {
+          "type": "string",
+          "enum": ["tier_1", "tier_2", "tier_3"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "priceLabel": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "durationDays": {
+          "type": "integer"
+        },
+        "isActive": {
+          "type": "boolean"
+        },
+        "sortOrder": {
+          "type": "integer"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "planId",
+        "name",
+        "description",
+        "priceLabel",
+        "durationDays",
+        "isActive",
+        "sortOrder",
+        "updatedAt"
+      ]
+    },
+    "SubscriptionRecord": {
+      "title": "SubscriptionRecord",
+      "description": "User subscription payment verification request and backend-verified status.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "planId": {
+          "type": "string",
+          "enum": ["tier_1", "tier_2", "tier_3"]
+        },
+        "planName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending_verification", "active", "expired", "rejected"]
+        },
+        "paymentReference": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 120
+        },
+        "verifiedBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "planId",
+        "planName",
+        "status",
+        "paymentReference",
+        "verifiedBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "User or message abuse report for admin moderation.",
+      "type": "object",
+      "properties": {
+        "reporterId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reportedUserId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "targetType": {
+          "type": "string",
+          "enum": ["user", "global_message", "private_message"]
+        },
+        "targetId": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "resolved", "dismissed"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "reporterId",
+        "reportedUserId",
+        "targetType",
+        "targetId",
+        "reason",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app and FCM-paired notification record scoped to a single recipient.",
+      "type": "object",
+      "properties": {
+        "recipientId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "type": {
+          "type": "string",
+          "enum": ["private_message", "global_chat", "subscription", "announcement", "account"]
+        },
+        "linkTarget": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "recipientId",
+        "title",
+        "body",
+        "type",
+        "linkTarget",
+        "read",
+        "createdAt"
+      ]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Official admin announcement visible to all authenticated users.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "isActive": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["title", "body", "authorId", "isActive", "createdAt"]
+    },
+    "AdminAuditLog": {
+      "title": "AdminAuditLog",
+      "description": "Immutable append-only audit log of administrative actions.",
+      "type": "object",
+      "properties": {
+        "adminUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "targetId": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["adminUid", "action", "targetId", "details", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/publicProfiles/{uid}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Publicly readable user profiles without PII."
+    },
+    "/userPrivate/{uid}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Private user settings, email PII, theme, blocked users, and push tokens."
+    },
+    "/usernames/{username}": {
+      "schema": { "$ref": "#/entities/UsernameReservation" },
+      "description": "Unique username reservation index."
+    },
+    "/admin/initialization": {
+      "schema": { "$ref": "#/entities/AdminInitialization" },
+      "description": "Immutable one-time initialization lock for first-account Main Admin."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted admin role registry."
+    },
+    "/globalChatMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/GlobalChatMessage" },
+      "description": "Real-time Global Chat messages."
+    },
+    "/privateChats/{conversationId}": {
+      "schema": { "$ref": "#/entities/PrivateChat" },
+      "description": "One-to-one private chat threads strictly restricted to participants."
+    },
+    "/privateChats/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/PrivateMessage" },
+      "description": "Messages belonging to a private conversation."
+    },
+    "/subscriptionPlans/{planId}": {
+      "schema": { "$ref": "#/entities/SubscriptionPlan" },
+      "description": "Three admin-configurable subscription plans."
+    },
+    "/subscriptions/{subscriptionId}": {
+      "schema": { "$ref": "#/entities/SubscriptionRecord" },
+      "description": "User subscription payment verifications and history."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "Abuse and moderation reports."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Recipient-scoped notifications."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Official admin announcements."
+    },
+    "/adminAuditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AdminAuditLog" },
+      "description": "Append-only admin audit trail."
+    }
+  }
+}

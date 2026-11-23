@@ -1,0 +1,111 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      ".indexOn": ["username", "displayName", "onlineStatus"],
+      "$uid": {
+        ".read": "auth != null && auth.token.email_verified == true",
+        ".write": "auth != null && auth.token.email_verified == true && auth.uid === $uid && !data.exists()",
+        "displayName": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60"
+        },
+        "username": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9_]{3,30}$/)"
+        },
+        "profilePhoto": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isString() && newData.val().length <= 1000"
+        },
+        "bio": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isString() && newData.val().length <= 240"
+        },
+        "profileColor": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)"
+        },
+        "theme": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.val() === 'light_pink' || newData.val() === 'eye_comfort_dark'"
+        },
+        "onlineStatus": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isBoolean()"
+        },
+        "lastSeen": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isNumber()"
+        },
+        "role": {
+          ".write": "false",
+          ".validate": "newData.val() === 'user' || newData.val() === 'admin' || newData.val() === 'main_admin'"
+        },
+        "isVerified": {
+          ".write": "root.child('admins').child(auth.uid).exists()",
+          ".validate": "newData.isBoolean()"
+        },
+        "subscriptionStatus": {
+          ".write": "root.child('admins').child(auth.uid).exists()",
+          ".validate": "newData.val() === 'none' || newData.val() === 'active' || newData.val() === 'expired'"
+        }
+      }
+    },
+    "globalChat": {
+      "messages": {
+        ".indexOn": ["timestamp"],
+        ".read": "auth != null && auth.token.email_verified == true",
+        "$messageId": {
+          ".write": "(auth != null && !data.exists() && newData.child('senderId').val() === auth.uid) || root.child('admins').child(auth.uid).exists()",
+          ".validate": "newData.hasChildren(['senderId', 'senderName', 'message', 'timestamp', 'messageType']) && newData.child('message').isString() && newData.child('message').val().length <= 1000"
+        }
+      }
+    },
+    "privateChats": {
+      "$conversationId": {
+        ".read": "auth != null && data.child('participants').child(auth.uid).val() === true",
+        ".write": "auth != null && ((!data.exists() && newData.child('participants').child(auth.uid).val() === true) || data.child('participants').child(auth.uid).val() === true)",
+        "messages": {
+          ".indexOn": ["timestamp"],
+          "$messageId": {
+            ".validate": "newData.child('senderId').val() === auth.uid && newData.child('message').isString() && newData.child('message').val().length <= 1000"
+          }
+        }
+      }
+    },
+    "subscriptions": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).exists())",
+        ".write": "root.child('admins').child(auth.uid).exists()"
+      }
+    },
+    "reports": {
+      "$reportId": {
+        ".read": "auth != null && (data.child('reporterId').val() === auth.uid || root.child('admins').child(auth.uid).exists())",
+        ".write": "auth != null && ((!data.exists() && newData.child('reporterId').val() === auth.uid) || root.child('admins').child(auth.uid).exists())"
+      }
+    },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$notificationId": {
+          ".write": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).exists())"
+        }
+      }
+    },
+    "admin": {
+      "initialization": {
+        ".read": "auth != null",
+        ".write": "auth != null && !data.exists() && newData.child('mainAdminUid').val() === auth.uid && newData.child('initialized').val() === true"
+      },
+      "auditLogs": {
+        ".read": "root.child('admins').child(auth.uid).exists()",
+        "$logId": {
+          ".write": "root.child('admins').child(auth.uid).exists() && !data.exists()"
+        }
+      }
+    }
+  }
+}

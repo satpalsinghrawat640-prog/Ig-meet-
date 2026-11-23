@@ -1,0 +1,76 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Theme 1: Light Pink (60-30-10 discipline) */
+  --bg-canvas: #FFF7FA;
+  --bg-surface: #FFFFFF;
+  --bg-surface-tonal: #FDEEF4;
+  --bg-surface-elevated: #FFFBFD;
+  --border-hairline: #F3D9E4;
+  --text-primary: #1F131A;
+  --text-secondary: #68525F;
+  --text-muted: #8E7583;
+  --accent-primary: #E11D6C;
+  --accent-hover: #C8155E;
+  --accent-soft: #FCE4EE;
+  --accent-on-primary: #FFFFFF;
+  --verified-blue: #1D9BF0;
+}
+
+.dark {
+  /* Theme 2: Eye-Comfort Dark (Deep Black + Pink/Red accents) */
+  --bg-canvas: #090709;
+  --bg-surface: #130F13;
+  --bg-surface-tonal: #1C151B;
+  --bg-surface-elevated: #1A1319;
+  --border-hairline: #2B2029;
+  --text-primary: #F7EFF3;
+  --text-secondary: #B4A0AC;
+  --text-muted: #84707C;
+  --accent-primary: #F43F7A;
+  --accent-hover: #FB5B8E;
+  --accent-soft: #2E1420;
+  --accent-on-primary: #FFFFFF;
+  --verified-blue: #38BDF8;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    font-family: var(--font-body);
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .dark body {
+    letter-spacing: 0.008em;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}

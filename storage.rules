@@ -1,0 +1,41 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    function isVerifiedUser() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidImageUpload() {
+      return request.resource != null &&
+        request.resource.size > 0 &&
+        request.resource.size <= 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
+    }
+
+    // Profile photos: users can only upload/overwrite within their own UID folder
+    match /profilePhotos/{uid}/{fileName} {
+      allow read: if isVerifiedUser();
+      allow write: if isVerifiedUser() &&
+        request.auth.uid == uid &&
+        isValidImageUpload() &&
+        fileName.size() <= 128 &&
+        fileName.matches('^[a-zA-Z0-9._\\-]+$');
+      allow delete: if isVerifiedUser() && request.auth.uid == uid;
+    }
+
+    // Permitted chat media scoped to uploader UID
+    match /chatMedia/{uid}/{fileName} {
+      allow read: if isVerifiedUser();
+      allow write: if isVerifiedUser() &&
+        request.auth.uid == uid &&
+        isValidImageUpload() &&
+        fileName.size() <= 128 &&
+        fileName.matches('^[a-zA-Z0-9._\\-]+$');
+      allow delete: if isVerifiedUser() && request.auth.uid == uid;
+    }
+  }
+}
